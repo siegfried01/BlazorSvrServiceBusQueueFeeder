@@ -1,0 +1,149 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@using static System.DateTime
+@using static System.Environment
+@using Azure.Messaging.ServiceBus
+<PageTitle>Home</PageTitle>
+
+<h1>Hello, world!</h1>
+<p>@builtAt</p>
+<h2>Welcome to BlazorSvr Service Bus Test Data Feeder</h2>
+<p>This is a simple example of a Blazor Server app that sends test messages to an Azure Service Bus queue.</p>
+<table border="1">
+    <thead>
+    </thead>
+    <tbody>
+        <tr>
+            <td><button class="button" @onclick="GetCurrentDateTime">Get Date Time</button> </td>
+            <td><InputText @bind-Value=@currentDateTime size="50" /></td>
+        </tr>
+        <tr>
+            <td>
+                <label for="connectionString">Connection String:</label>
+            </td>
+            <td>
+                <input type="text" id="connectionString" name="connectionString" @bind-value="connectionString" size="80" />
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <label for="busNS">Namespace:</label>
+            </td>
+            <td>
+                <input type="text" id="busNS" name="busNS" @bind-value=spaceName size="80" />
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <label for="queue">Queue:</label>
+            </td>
+            <td>
+                <input type="text" id="queue" name="queue" @bind-value=queueName size="80" />
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <label for="message">Message:</label>
+            </td>
+            <td>
+                <input type="text" id="message" name="message" @bind-value=message size="80" />
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <label for="messageCount">Message Count:</label>
+            </td>
+            <td>
+                <InputNumber id="messageCount" @bind-Value="messageCount" />
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <label for="intermessagedelay">Inter-message delay in milliseconds:</label>
+            </td>
+            <td>
+                <InputNumber id="intermessagedelay" @bind-Value="interMessageDelayMilliSeconds" />
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <label for="repeatCount">Repeat Count:</label>
+            </td>
+            <td>
+                <InputNumber id="repeatCount" @bind-Value="repeatCount" />
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" align="center">
+                <button @onclick="@SendTestMessage">Send Test Message</button>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+@code {
+
+    string connectionString = GetEnvironmentVariable("serviceBusConnectionString");
+    string spaceName = GetEnvironmentVariable("busNS");
+    string queueName = GetEnvironmentVariable("queue");
+
+
+    string builtAt = "Built at Mon Jul 08 05:58:04 2024";
+    int repeatCount = 4;
+    int messageCount = 0;
+    int interMessageDelayMilliSeconds = 100;
+    string message = "Hello, world!";
+    string currentDateTime = "";
+    void GetCurrentDateTime()
+    {
+        currentDateTime = DateTime.Now.ToString("ddd MMM dd, yyyy hh:mm:ss.fff tt (zzz)");
+    }
+
+    async Task SendTestMessage()
+    {
+        for (int ii = 0; ii < repeatCount; ii++)
+        {
+            if ( ii > 0)
+            {
+                await Task.Delay(interMessageDelayMilliSeconds);
+            }
+            var now = DateTime.Now.ToString("MMM dd, yyyy hh:mm:ss.ffff tt (zz)");
+            message = $"{builtAt} Current time={now} count={messageCount:D6}-{ii:D2}  message={message}";
+            await SendMessage();
+        }
+        messageCount++;
+        await Task.CompletedTask;
+    }
+    async Task SendMessage()
+    {
+        var clientOptions = new ServiceBusClientOptions()
+            {
+                TransportType = ServiceBusTransportType.AmqpWebSockets
+            };
+        var client = new ServiceBusClient(connectionString, clientOptions);
+        var sender = client.CreateSender(queueName);
+
+        using (ServiceBusMessageBatch messageBatch = await sender.CreateMessageBatchAsync())
+        {
+            if (!messageBatch.TryAddMessage(new ServiceBusMessage(message)))
+            {
+                throw new Exception($"Message is too large to fit in a batch. Max size: {messageBatch.MaxSizeInBytes}");
+            }
+            await sender.SendMessagesAsync(messageBatch);
+
+            try
+            {
+                // Use the producer client to send the batch of messages to the Service Bus queue
+                await sender.SendMessagesAsync(messageBatch);
+                //WriteLine($"A batch of {numOfMessages} messages has been published to the queue.");
+            }
+            finally
+            {
+                // Calling DisposeAsync on client types is required to ensure that network
+                // resources and other unmanaged objects are properly cleaned up.
+                await sender.DisposeAsync();
+                await client.DisposeAsync();
+            }
+        }
+    }
+}

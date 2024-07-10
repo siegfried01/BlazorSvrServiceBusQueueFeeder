@@ -78,6 +78,11 @@
                 <button @onclick="@SendTestMessage">Send Test Message</button>
             </td>
         </tr>
+        <tr>
+            <td colspan="2">
+                <InputTextArea @bind-Value=@logEntry rows="5" cols="180"  style="resize:both;width:auto;word-wrap:anywhere"/>
+            </td>
+        </tr>
     </tbody>
 </table>
 
@@ -93,6 +98,7 @@
     int messageCount = 0;
     int interMessageDelayMilliSeconds = 100;
     string message = "Hello, world!";
+    string logEntry = "";
     string currentDateTime = "";
     void GetCurrentDateTime()
     {
@@ -108,7 +114,7 @@
                 await Task.Delay(interMessageDelayMilliSeconds);
             }
             var now = DateTime.Now.ToString("MMM dd, yyyy hh:mm:ss.ffff tt (zz)");
-            message = $"{builtAt} Current time={now} count={messageCount:D6}-{ii:D2}  message={message}";
+            logEntry = $"{builtAt} Current time={now} count={messageCount:D6}-{ii:D2}  message={message}";
             await SendMessage();
         }
         messageCount++;
@@ -125,7 +131,7 @@
 
         using (ServiceBusMessageBatch messageBatch = await sender.CreateMessageBatchAsync())
         {
-            if (!messageBatch.TryAddMessage(new ServiceBusMessage(message)))
+            if (!messageBatch.TryAddMessage(new ServiceBusMessage(logEntry)))
             {
                 throw new Exception($"Message is too large to fit in a batch. Max size: {messageBatch.MaxSizeInBytes}");
             }
